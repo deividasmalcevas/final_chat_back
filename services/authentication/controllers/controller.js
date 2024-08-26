@@ -4,59 +4,39 @@ const logError = require('../plugins/errSaver')
 const bcrypt = require('bcrypt');
 const {sendVerifyEmail} = require("../plugins/sendEmail");
 const generateVerificationCode = require('../plugins/gen8code');
+const jwt = require('jsonwebtoken');
 
 module.exports = {
-    test: async (req,res) => {
-        res.send("Hello World!");
-    },
-
     login: async (req,res) => {
-        const { phone, password } = req.body;
-        try {
-            const user = await User.findOne({ phoneNumber: phone });
-            if (!user) {
-                return res.status(404).json({ success: false, error: 'Blogi duomenys' });
-            }
+        const { identifier, password } = req.body;
 
-            const isPasswordMatch = await bcrypt.compare(password, user.password);
-            if (!isPasswordMatch) {
-                return res.status(401).json({ success: false, error: 'Blogi duomenys' });
-            }
+        try {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            let user;
+
+            if (emailRegex.test(identifier)) user = await User.findOne({ email: identifier });
+            else user = await User.findOne({ username: identifier });
+
+            if (!user) return res.status(400).json({ error: "User not found." });
+
+            // Check if the password is correct
+            const isMatch = await bcrypt.compare(password, user.password);
+            if (!isMatch) return res.status(400).json({ error: "Invalid password." });
+
             await User.findOneAndUpdate(
                 {_id: user._id},
                 { $set: { timeUpdated: Date.now() } }
             )
-            const token = jwt.sign({ userId: user._id,ownerUsername:user.username, phoneNumber: user.phoneNumber }, process.env.JWT_KEY);
-
-            // Check if feedback entry exists
-            const feedback = await Feedback.findOne({reviewee_id: user._id})
-
-            // If feedback entry does not exist
-            if (!feedback) {
-                const newFeedback = new Feedback({reviewee_id: user._id})
-                await newFeedback.save()
-            }
+            const token = jwt.sign({ userId: user._id, username: user.username }, process.env.JWT_KEY);
 
             return res.status(200).json({ success: true, token, data: {
-                    username: user.username,
-                    phone: user.phoneNumber,
-                    nameSurname: user.nameSurname,
-                    carPlateNumber: user.carPlateNumber,
-                    id: user._id,
-                    currier: user.currier,
-                    avatar: user.avatar,
-                    email: user.email,
-                    shipmentsSent: user.shipmentsSent,
-                    deliveredShipments: user.deliveredShipments,
-                    timeUpdated: user.timeUpdated,
-                    timeCreated: user.timeCreated
+                    username: user.username
                 },
-                message: 'Sėkmingai prisijungta' });
+                message: 'Login Success' });
         } catch (error) {
-            console.error("Įvyko klaida: ", error);
             await logError({
                 service: 'Authentication',
-                file: 'authController',
+                file: 'controller',
                 place: 'login',
                 error: error
             })
@@ -97,7 +77,13 @@ module.exports = {
 
             res.status(200).json({ message: "Verification email sent. Please check your inbox." });
         } catch (error) {
-            return res.status(500).json({ error: "Error saving temporary user data." });
+            await logError({
+                service: 'Authentication',
+                file: 'controller',
+                place: 'register',
+                error: error
+            })
+            return res.status(500).json({ success: false, error: error.message });
         }
     },
 
@@ -118,7 +104,13 @@ module.exports = {
 
             res.status(200).json({ message: "Email verified successfully. You can now log in." });
         } catch (error) {
-            return res.status(500).json({ error: "Error saving user data." });
+            await logError({
+                service: 'Authentication',
+                file: 'controller',
+                place: 'verifyEmail',
+                error: error
+            })
+            return res.status(500).json({ success: false, error: error.message });
         }
     }
 }
