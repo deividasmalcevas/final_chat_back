@@ -1,5 +1,4 @@
 module.exports = {
-
     user: {
         username: {
             type: String,
@@ -15,7 +14,7 @@ module.exports = {
         },
         email: {
             type: String,
-            required: false,
+            required: true,
         },
         timeCreated: {
             type: Number,
@@ -27,6 +26,13 @@ module.exports = {
             required: true,
             default: Date.now()
         },
+    },
+    tempUser:{
+        email: { type: String, required: true },
+        username: { type: String, required: true },
+        passwordHash: { type: String, required: true },
+        verificationToken: { type: String, required: true },
+        createdAt: { type: Date, default: Date.now, expires: '5m' }
     },
     errorDb: {
         service: {
