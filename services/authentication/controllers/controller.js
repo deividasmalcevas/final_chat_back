@@ -5,6 +5,7 @@ const bcrypt = require('bcrypt');
 const {sendVerifyEmail} = require("../plugins/sendEmail");
 const generateVerificationCode = require('../plugins/gen8code');
 const jwt = require('jsonwebtoken');
+const {user} = require("../../../schemas/allSchemas");
 
 module.exports = {
     login: async (req,res) => {
@@ -17,11 +18,11 @@ module.exports = {
             if (emailRegex.test(identifier)) user = await User.findOne({ email: identifier });
             else user = await User.findOne({ username: identifier });
 
-            if (!user) return res.status(400).json({ error: "User not found." });
+            if (!user) return res.status(400).json({ error: "Invalid email/username or password." });
 
             // Check if the password is correct
             const isMatch = await bcrypt.compare(password, user.password);
-            if (!isMatch) return res.status(400).json({ error: "Invalid password." });
+            if (!isMatch) return res.status(400).json({ error: "Invalid email/username or password." });
 
             await User.findOneAndUpdate(
                 {_id: user._id},
@@ -62,6 +63,7 @@ module.exports = {
 
             if (tempUser) {
                 tempUser.verificationToken = verificationToken;
+                tempUser.username = username;
                 tempUser.passwordHash = passwordHash;
                 await tempUser.save();
             } else {
