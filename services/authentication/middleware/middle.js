@@ -26,8 +26,9 @@ module.exports = {
         }
 
         // Check if email contains 'gmail.com'
-        if (!email.includes("@gmail.com")) {
-            return res.status(400).json({ error: "Email must be a Gmail address." });
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // Basic email regex
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ error: "Invalid email format." });
         }
         next();
     },

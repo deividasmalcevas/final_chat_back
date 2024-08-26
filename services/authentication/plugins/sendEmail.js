@@ -21,19 +21,20 @@ const sendEmail = {
             }
 
             const transporter = nodemailer.createTransport({
-                service: "Gmail",
+                host: "smtp.office365.com",
+                port: 587,
                 secure: false,
                 auth: {
-                    user: process.env.GMAIL,
-                    pass: process.env.GMAIL_PASS,
+                    user: process.env.OUTLOOK_EMAIL, // Your Outlook email
+                    pass: process.env.OUTLOOK_PASS, // Your Outlook password
                 },
                 tls: {
-                    rejectUnauthorized: false,
+                    ciphers: 'SSLv3',
                 },
             });
 
             const mailOptions = {
-                from: process.env.GMAIL,
+                from: process.env.OUTLOOK_EMAIL,
                 to: email,
                 subject: subject,
                 html: emailTemplate(userName, verificationCode),
