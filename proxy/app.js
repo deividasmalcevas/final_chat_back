@@ -5,12 +5,20 @@ const cors = require("cors");
 const app = express();
 
 const PORT = 3001;
+
 /// DEV
 const HOST = "localhost";
+
 /// PROD
 // const HOST = "URL";
 
-app.use(cors());
+const corsOptions = {
+    origin: "http://localhost:3000", // Specify the exact origin
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true, // Allow credentials (cookies)
+};
+
+app.use(cors(corsOptions));
 
 const proxy = (port, url) => {
     return createProxyMiddleware({
@@ -35,6 +43,7 @@ const proxy = (port, url) => {
 };
 
 app.use("/auth", proxy(1000, "auth"));
+app.use("/private", proxy(1001, "private"));
 
 app.listen(PORT, HOST, () => {
     console.log(`Proxy Started at: ${HOST}:${PORT}`);
