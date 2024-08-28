@@ -37,12 +37,14 @@ module.exports = {
         }
         next();
     },
+
     registerToken: (req, res, next) => {
         const { token } = req.body;
         if (!token) return res.status(400).json({ error: "All fields are required." });
         if(token.length !== 8) return res.status(400).json({ error: "Token must be 8 characters long." });
         next();
     },
+
     loginValid: (req, res, next) => {
         const { identifier, password } = req.body;
 
@@ -59,4 +61,6 @@ module.exports = {
 
         next();
     }
+
+
 };

@@ -8,43 +8,62 @@ const jwt = require('jsonwebtoken');
 const {user} = require("../../../schemas/allSchemas");
 
 module.exports = {
-    login: async (req,res) => {
+    login: async (req, res) => {
         const { identifier, password } = req.body;
 
         try {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             let user;
 
-            if (emailRegex.test(identifier)) user = await User.findOne({ email: identifier });
-            else user = await User.findOne({ username: identifier });
+            if (emailRegex.test(identifier)) {
+                user = await User.findOne({ email: identifier });
+            } else {
+                user = await User.findOne({ username: identifier });
+            }
 
-            if (!user) return res.status(400).json({ error: "Invalid email/username or password." });
+            if (!user) {
+                return res.status(400).json({ error: "Invalid email/username or password." });
+            }
 
             // Check if the password is correct
             const isMatch = await bcrypt.compare(password, user.password);
-            if (!isMatch) return res.status(400).json({ error: "Invalid email/username or password." });
+            if (!isMatch) {
+                return res.status(400).json({ error: "Invalid email/username or password." });
+            }
 
             await User.findOneAndUpdate(
-                {_id: user._id},
+                { _id: user._id },
                 { $set: { timeUpdated: Date.now() } }
-            )
-            const token = jwt.sign({ userId: user._id, username: user.username }, process.env.JWT_KEY);
+            );
 
-            return res.status(200).json({ success: true, token, data: {
-                    username: user.username
-                },
-                message: 'Login Success' });
+            // Create JWT token
+            const token = jwt.sign({ userId: user._id, username: user.username }, process.env.JWT_KEY, {
+                expiresIn: '1s',
+            });
+
+            // Set HttpOnly cookie
+            res.cookie('token', token, {
+                httpOnly: true,  // Prevents access via JavaScript
+                // secure: false,   // Set to true if using HTTPS
+                maxAge: 3600000, // 1 hour
+            });
+            //for log
+            res.cookie('isLoggedIn', true, {
+                maxAge: 3600000, // 1 hour
+                path: '/', // Path where the cookie is available
+            });
+
+            return res.status(200).json({ success: true, message: 'Login Success' });
         } catch (error) {
             await logError({
                 service: 'Authentication',
                 file: 'controller',
                 place: 'login',
                 error: error
-            })
+            });
             return res.status(500).json({ success: false, error: error.message });
         }
     },
-
     register: async (req, res) => {
         const { email, username, password1 } = req.body;
 

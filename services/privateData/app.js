@@ -8,7 +8,7 @@ const cookieParser = require('cookie-parser');
 dotenv.config({ path: path.resolve(__dirname, '../../../final_chat_back/.env') });
 
 const app = express();
-const port = 1000;
+const port = 1001;
 
 const corsOptions = {
     origin: "http://localhost:3000", // Specify the exact origin

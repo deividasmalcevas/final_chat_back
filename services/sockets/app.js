@@ -1,0 +1,61 @@
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+
+const app = express();
+
+
+
+
+app.use(cors({})); // Enable CORS for all routes
+
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "http://localhost:3000", // Allow requests from this origin
+        methods: ["GET", "POST"]
+    }
+});
+
+// Store connected users and their sockets
+const userSockets = new Map();
+
+io.on('connection', (socket) => {
+    console.log('New client connected', socket.id);
+
+    // Handle user login
+    socket.on('user_login', (user) => {
+        userSockets.set(user.id, socket.id);
+        console.log(`User logged in: ${user.name} with ID: ${user.id}`);
+    });
+
+    // Handle user logout
+    socket.on('user_logout', (data) => {
+        userSockets.delete(data.id);
+        console.log(`User logged out with ID: ${data.id}`);
+    });
+
+    // Handle sending messages
+    socket.on('send_message', (message) => {
+        console.log('Message received:', message);
+        io.emit('new_message', message); // Emit the message to all connected clients
+    });
+
+    // Handle disconnect event
+    socket.on('disconnect', () => {
+        console.log('Client disconnected:', socket.id);
+        for (const [userId, socketId] of userSockets.entries()) {
+            if (socketId === socket.id) {
+                userSockets.delete(userId);
+                console.log(`User with ID ${userId} removed from userSockets map after disconnect.`);
+                break;
+            }
+        }
+    });
+});
+
+const PORT = 1010;
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
