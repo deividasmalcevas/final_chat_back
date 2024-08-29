@@ -4,6 +4,7 @@ module.exports = {
     tokenValid: (req, res, next) => {
         try {
             const token = req.cookies.token; // Extract token from cookies
+
             if (!token) {
                 res.clearCookie('isLoggedIn'); // Clear cookie if token is missing
                 return res.status(401).json({ success: false, message: 'Session ended. Please log in again.' });
@@ -24,4 +25,40 @@ module.exports = {
             return res.status(401).json({ success: false, message: 'Session ended. Please log in again.' });
         }
     },
+    bioValid: (req, res, next) => {
+        const { bio } = req.body;
+        if (!bio) { return res.status(404).json({ success: false, message: 'Bio not found.' });}
+        if(bio.length >= 1000) return res.send({error: "Bio should be less than 1000 characters long." })
+        next();
+    },
+    usernameValid: (req, res, next) => {
+        const { username } = req.body;
+        if (username.length < 5 || username.length > 25) {
+            return res.send({ error: "Username must be between 5 and 25 characters long." });
+        }
+        next();
+    },
+    emailValid: (req, res, next) => {
+        const { email } = req.body;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email || !emailRegex.test(email)) {
+            return res.send({ error: "Invalid email address." });
+        }
+        next();
+    },
+    codeValid: (req, res, next) => {
+        const { code } = req.body;
+        if (!code || code.length !== 8) {
+            return res.send({ error: "Invalid code" });
+        }
+        next();
+    },
+    passwordValid: (req, res, next) => {
+        const { newPassword, password } = req.body;
+        const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+        if (!passwordRegex.test(newPassword)) {
+            return res.send({error: "Password must be at least 8 characters long, contain at least one uppercase letter, and one number.",});
+        }
+        next();
+    }
 };
