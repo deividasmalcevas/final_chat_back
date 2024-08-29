@@ -16,6 +16,10 @@ module.exports = {
             type: String,
             required: true,
         },
+        bio: {
+            type: String,
+            required: false,
+        },
         timeCreated: {
             type: Number,
             required: true,
@@ -55,5 +59,14 @@ module.exports = {
             type: String,
             required: true,
         }
-    }
+    },
+    tempVerify: {
+        userId: {
+            type: String,
+            required: true
+        },
+        verificationToken: { type: String, required: true },
+        newEmail: { type: String, required: false },
+        delUser: { type: Boolean, required: false }
+    },
 }

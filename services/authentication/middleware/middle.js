@@ -12,9 +12,8 @@ module.exports = {
                 error: "Username must be made from letters, numbers, or the underscore character."
             });
         }
-        // Check if username is at least 5 characters long
-        if (username.length < 5) {
-            return res.status(400).json({ error: "Username must be at least 5 characters long." });
+        if (username.length < 5 || username.length > 25) {
+            return res.status(400).json({ error: "Username must be between 5 and 25 characters long." });
         }
 
         // Check if password is at least 8 characters long, contains at least one uppercase letter and one number

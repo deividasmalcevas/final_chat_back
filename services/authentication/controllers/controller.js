@@ -38,7 +38,7 @@ module.exports = {
 
             // Create JWT token
             const token = jwt.sign({ userId: user._id, username: user.username }, process.env.JWT_KEY, {
-                expiresIn: '1s',
+                expiresIn: '1h',
             });
 
             // Set HttpOnly cookie
@@ -116,7 +116,8 @@ module.exports = {
         const user = new User({
             email: tempUser.email,
             username: tempUser.username,
-            password: tempUser.passwordHash
+            password: tempUser.passwordHash,
+            avatar: "https://res.cloudinary.com/dayly4g5u/image/upload/v1724912561/user-avatars/pofpiiu7fodiqf6kkqxg.jpg"
         });
 
         try {
