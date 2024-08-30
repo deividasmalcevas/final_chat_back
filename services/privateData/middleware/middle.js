@@ -4,7 +4,6 @@ module.exports = {
     tokenValid: (req, res, next) => {
         try {
             const token = req.cookies.token; // Extract token from cookies
-
             if (!token) {
                 res.clearCookie('isLoggedIn'); // Clear cookie if token is missing
                 return res.status(401).json({ success: false, message: 'Session ended. Please log in again.' });
@@ -58,6 +57,16 @@ module.exports = {
         const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
         if (!passwordRegex.test(newPassword)) {
             return res.send({error: "Password must be at least 8 characters long, contain at least one uppercase letter, and one number.",});
+        }
+        next();
+    },
+    privateMsgValid: (req, res, next) => {
+        const { username, msg } = req.body;
+        if (!username || !msg) {
+            return res.status(400).send({ error: "Missing username or message." });
+        }
+        if (msg.length > 2000) {
+            return res.status(400).send({ error: "Message too long 2000 character max." });
         }
         next();
     }

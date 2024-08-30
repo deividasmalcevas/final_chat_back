@@ -34,7 +34,17 @@ const emailTemplateDel = (userName, verificationCode) => `
         <div style="color: #9ca3af; font-size: 10px;">Copyright © ${new Date().getFullYear()} - All rights reserved by Chat</div>
     </div>
 `;
-
+const emailTemplatePass = (userName, verificationCode) => `
+   <div style="padding: 16px; text-align: center; font-family: Arial, sans-serif;">
+        <div style="background-color: white; padding: 24px; max-width: 500px; margin: auto;">
+            <h1 style="font-size: 24px; font-weight: 600;">Hello, ${userName}!</h1>
+            <p style="font-size: 16px; color: #555;">Here is your password recovery code. Please find your verification code below:</p>
+            <div style="padding: 32px; background-color: #f3f4f6; font-size: 40px; font-weight: bold; border-radius: 8px;">${verificationCode}</div>
+            <p style="font-size: 16px; color: #555; margin-top: 20px;">Use this code to change your password.</p>
+        </div>
+        <div style="color: #9ca3af; font-size: 10px;">Copyright © ${new Date().getFullYear()} - All rights reserved by Chat</div>
+    </div>
+`;
 
 const sendEmail = {
     sendVerifyEmail: async (email, subject, userName, verificationCode) => {
@@ -78,6 +88,14 @@ const sendEmail = {
                     to: email,
                     subject: subject,
                     html: emailTemplateDel(userName, verificationCode),
+                };
+            }
+            if(subject === "Password Recovery"){
+                mailOptions = {
+                    from: process.env.OUTLOOK_EMAIL,
+                    to: email,
+                    subject: subject,
+                    html: emailTemplatePass(userName, verificationCode),
                 };
             }
 

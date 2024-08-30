@@ -1,6 +1,9 @@
 const express = require("express");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const cors = require("cors");
+const dotenv = require("dotenv");
+const path = require("path");
+dotenv.config({ path: path.resolve(__dirname, '../../final_chat_back/.env') });
 
 const app = express();
 
@@ -8,12 +11,12 @@ const PORT = 3001;
 
 /// DEV
 const HOST = "localhost";
-
+// const HOST = "192.168.0.110";
 /// PROD
 // const HOST = "URL";
 
 const corsOptions = {
-    origin: "http://localhost:3000", // Specify the exact origin
+    origin: process.env.ORIGIN,
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true, // Allow credentials (cookies)
 };
