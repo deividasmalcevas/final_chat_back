@@ -2,10 +2,11 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-
+const dotenv = require("dotenv");
+const path = require("path");
 const app = express();
 
-
+dotenv.config({ path: path.resolve(__dirname, '../../../final_chat_back/.env') });
 
 
 app.use(cors({})); // Enable CORS for all routes
@@ -13,10 +14,12 @@ app.use(cors({})); // Enable CORS for all routes
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: "http://localhost:3000", // Allow requests from this origin
+        origin: process.env.ORIGIN,
         methods: ["GET", "POST"]
     }
 });
+//a
+console.log(process.env.ORIGIN)
 
 // Store connected users and their sockets
 const userSockets = new Map();

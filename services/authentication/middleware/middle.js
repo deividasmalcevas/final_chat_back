@@ -59,7 +59,29 @@ module.exports = {
         }
 
         next();
+    },
+
+    emailValid: (req, res, next) => {
+        const { email } = req.body;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; // Basic email regex
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ error: "Invalid email format." });
+        }
+        next();
+    },
+    codeValid: (req, res, next) => {
+        const { code } = req.body;
+        if (!code || code.length !== 8) {
+            return res.send({ error: "Invalid code" });
+        }
+        next();
+    },
+    passwordValid: (req, res, next) => {
+        const { password } = req.body;
+        const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+        if (!passwordRegex.test(password)) {
+            return res.send({error: "Password must be at least 8 characters long, contain at least one uppercase letter, and one number.",});
+        }
+        next();
     }
-
-
 };

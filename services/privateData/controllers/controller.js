@@ -1,5 +1,6 @@
 const User = require('../schemas/userSchemas');
 const tempVerify = require('../schemas/tempVerify');
+const Conversation = require('../schemas/messsageSchema');
 
 const logError = require('../../authentication/plugins/errSaver')
 const bcrypt = require("bcrypt");
@@ -257,5 +258,141 @@ module.exports = {
                 .json({ success: false, message: "Internal error" });
         }
     },
+
+    getUsers: async (req, res) => {
+        try {
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 20;
+            const skip = (page - 1) * limit;
+
+            const users = await User.find()
+                .skip(skip)
+                .limit(limit)
+                .exec();
+
+            const totalUsers = await User.countDocuments();
+
+            const totalPages = Math.ceil(totalUsers / limit);
+
+            res.json({success: true, data: {
+                    users, totalPages, currentPage: page,},
+            });
+        } catch (error) {
+            await logError({
+                service: 'privateData',
+                file: 'controller',
+                place: 'getUsers',
+                error: error
+            })
+            return res
+                .status(500)
+                .json({ success: false, message: "Internal error" });
+        }
+    },
+
+    getSingleUser: async (req, res) => {
+        try {
+            const reqUser = await User.findOne({_id: req.user.userId})
+            if (!reqUser)  return res.send({ error: "Unknown user" });
+            const { username } = req.params;
+            if(username === reqUser.username) {
+                return res.send({same: true});
+            }
+
+            const user = await User.findOne({username: username})
+            if (!user)  return res.send({ error: "Unknown user" });
+            return res.status(200).json({ success: true, data: user,  });
+        } catch (error) {
+            await logError({
+                service: 'privateData',
+                file: 'controller',
+                place: 'getSingleUser',
+                error: error
+            })
+            return res
+                .status(500)
+                .json({ success: false, message: "Internal error" });
+        }
+    },
+
+    sendPrivateMsg: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).send({ error: "Unknown user" });
+
+            const { username, msg } = req.body;
+
+            const user = await User.findOne({ username: username });
+            if (!user) return res.status(404).send({ error: "Unknown user" });
+
+            let conversation = await Conversation.findOne({
+                RoomStatus: "private",
+                participants: { $all: [reqUser._id, user._id] }
+            });
+
+            if (!conversation) {
+
+                conversation = new Conversation({
+                    RoomName: `${user.username}-${reqUser.username}`,
+                    RoomStatus: "private",
+                    participants: [user._id, reqUser._id],
+                    messages: [{
+                        sender: reqUser.username,
+                        avatar: reqUser.avatar,
+                        content: msg,
+                        timestamp: Date.now()
+                    }]
+                });
+            } else {
+                conversation.messages.push({
+                    sender: reqUser.username,
+                    avatar: reqUser.avatar,
+                    content: msg,
+                    timestamp: Date.now()
+                });
+            }
+
+            await conversation.save();
+            return res.status(200).json({ success: true, data: conversation });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'privateData',
+                file: 'controller',
+                place: 'sendMessage',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+
+    getConversation: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).send({ error: "Unknown user" });
+
+            const { username } = req.params;
+
+            const user = await User.findOne({ username: username });
+            if (!user) return res.status(404).send({ error: "Unknown user" });
+
+            let conversation = await Conversation.findOne({
+                RoomStatus: "private",
+                participants: { $all: [reqUser._id, user._id] }
+            });
+            if (!conversation) return res.send({error: "There is no conversation" });
+            return res.status(200).json({ success: true, data: conversation });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'privateData',
+                file: 'controller',
+                place: 'getConversation',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    }
+
 
 }

@@ -67,6 +67,41 @@ module.exports = {
         },
         verificationToken: { type: String, required: true },
         newEmail: { type: String, required: false },
-        delUser: { type: Boolean, required: false }
+        delUser: { type: Boolean, required: false },
+        createdAt: { type: Date, default: Date.now, expires: '5m' }
     },
+    conversation: {
+        RoomName: {
+            type: String,
+            required: true,
+            unique: true
+        },
+        RoomStatus: {
+            type: String,
+            enum: ['private', 'public'],
+            default: 'private'
+        },
+        participants: [{
+            type: String,
+        }],
+        messages: [{
+            sender: {
+                type: String,
+                required: true
+            },
+            avatar: {
+                type: String,
+                required: true
+            },
+            content: {
+                type: String,
+                required: true
+            },
+            timestamp: {
+                type: Date,
+                default: Date.now
+            }
+        }]
+    },
+
 }

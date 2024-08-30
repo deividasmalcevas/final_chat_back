@@ -1,5 +1,7 @@
 const User = require('../schemas/userSchemas');
 const TempUser = require('../schemas/tempSchema');
+const tempVerify = require('../schemas/tempVerify');
+
 const logError = require('../plugins/errSaver')
 const bcrypt = require('bcrypt');
 const {sendVerifyEmail} = require("../plugins/sendEmail");
@@ -9,6 +11,7 @@ const {user} = require("../../../schemas/allSchemas");
 
 module.exports = {
     login: async (req, res) => {
+
         const { identifier, password } = req.body;
 
         try {
@@ -134,5 +137,46 @@ module.exports = {
             })
             return res.status(500).json({ success: false, error: error.message });
         }
+    },
+
+    passwordRecovery: async (req, res) => {
+        const { email } = req.body;
+        const user = await User.findOne({ email });
+        if(!user) return res.send({ error: "Email doesn't exist." });
+        const verificationToken = generateVerificationCode();
+
+
+        let temp = await tempVerify.findOne({ userId: user._id, delUser: false});
+
+        if (temp) {
+            temp.verificationToken = verificationToken;
+            temp.createdAt = Date.now()
+            await temp.save();
+        } else {
+            temp = new tempVerify({
+                userId: user._id,
+                verificationToken,
+            });
+            await temp.save();
+        }
+        await sendVerifyEmail(email, "Password Recovery", user.username, verificationToken);
+
+        return res.send({ success: true ,message: "Verification code sent successfully." });
+    },
+
+    passwordReset: async (req, res) => {
+        const { code, password, email } = req.body;
+        const user = await User.findOne({ email });
+        if(!user) return res.send({ error: "User doesn't exist." });
+        let temp = await tempVerify.findOne({ userId: user._id, verificationToken: code});
+        if (!temp) {return res.send({ error: "Invalid or expired token." });}
+
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(password, salt);
+
+        user.password = passwordHash
+        await user.save()
+
+        return res.send({ success: true ,message: "Password reset successfully." });
     }
 }
