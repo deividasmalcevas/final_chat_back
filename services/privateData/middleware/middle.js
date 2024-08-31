@@ -69,5 +69,64 @@ module.exports = {
             return res.status(400).send({ error: "Message too long 2000 character max." });
         }
         next();
-    }
+    },
+    addMsgReactValid: (req, res, next) => {
+        const { conID, messageId, reaction } = req.body;
+        if (!conID || !messageId || !reaction) {
+            return res.send({ error: "Missing conversation, message or reaction" });
+        }
+        next();
+    },
+    delMsgValid: (req, res, next) => {
+        const { conID, messageId } = req.body;
+        if (!conID || !messageId) {
+            return res.send({ error: "Missing conversation or message" });
+        }
+        next();
+    },
+    delConvoValid: (req, res, next) => {
+        const { conID, messageId } = req.body;
+        if (!conID) {
+            return res.send({ error: "Missing conversation." });
+        }
+        next();
+    },
+    createRoomValid: (req, res, next) => {
+        const {roomName, bio} = req.body;
+        if (!roomName || !bio) {
+            return res.send({ error: "Missing room name or bio." });
+        }
+        if(roomName.length < 5 || roomName.length > 50) {
+            return res.send({ error: "Room name must be between 5 - 50 characters long." });
+        }
+        if(bio.length < 5 || bio.length > 100) {
+            return res.send({ error: "Bio name must be between 5 - 100 characters long." });
+        }
+        next();
+    },
+    getRoomValid: (req, res, next) => {
+        const {roomId} = req.params;
+        if (!roomId) {
+            return res.send({ error: "Missing room." });
+        }
+        next();
+    },
+    publicMsgValid: (req, res, next) => {
+        const { roomId, msg } = req.body;
+
+        if (!roomId || !msg) {
+            return res.status(400).send({ error: "Missing room or message." });
+        }
+        if (msg.length > 2000) {
+            return res.status(400).send({ error: "Message too long 2000 character max." });
+        }
+        next();
+    },
+    deleteRoomValid: (req, res, next) => {
+        const {roomId} = req.body;
+        if (!roomId) {
+            return res.send({ error: "Missing room." });
+        }
+        next();
+    },
 };
