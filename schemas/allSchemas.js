@@ -81,6 +81,12 @@ module.exports = {
             enum: ['private', 'public'],
             default: 'private'
         },
+        owner:{
+            type: String,
+        },
+        bio:{
+          type: String,
+        },
         participants: [{
             type: String,
         }],
@@ -96,6 +102,36 @@ module.exports = {
             content: {
                 type: String,
                 required: true
+            },
+            reactions: {
+                likes: {
+                    count: {
+                        type: Number,
+                        default: 0
+                    },
+                    users: [{ type: String }]
+                },
+                hearts: {
+                    count: {
+                        type: Number,
+                        default: 0
+                    },
+                    users: [{ type: String }]
+                },
+                laughs: {
+                    count: {
+                        type: Number,
+                        default: 0
+                    },
+                    users: [{ type: String }]
+                },
+                sads: {
+                    count: {
+                        type: Number,
+                        default: 0
+                    },
+                    users: [{ type: String }]
+                }
             },
             timestamp: {
                 type: Date,

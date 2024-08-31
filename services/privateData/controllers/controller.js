@@ -17,7 +17,7 @@ module.exports = {
         if (!user)  return res.status(400).json({ error: "Unknown user" });
         user.timeUpdated = new Date();
         await user.save()
-        return res.status(200).json({ success: true, data: {bio: user.bio , username: user.username, avatar: user.avatar , joined: user.timeCreated, online: user.timeUpdated, email: user.email} });
+        return res.status(200).json({ success: true, data: {_id: user._id, bio: user.bio , username: user.username, avatar: user.avatar , joined: user.timeCreated, online: user.timeUpdated, email: user.email} });
     },
     logout: async (req, res) => {
         res.clearCookie('token');
@@ -262,7 +262,7 @@ module.exports = {
     getUsers: async (req, res) => {
         try {
             const page = parseInt(req.query.page) || 1;
-            const limit = parseInt(req.query.limit) || 20;
+            const limit = parseInt(req.query.limit) || 12;
             const skip = (page - 1) * limit;
 
             const users = await User.find()
@@ -366,7 +366,7 @@ module.exports = {
         }
     },
 
-    getConversation: async (req, res) => {
+    getPrivateCon: async (req, res) => {
         try {
             const reqUser = await User.findById(req.user.userId);
             if (!reqUser) return res.status(404).send({ error: "Unknown user" });
@@ -392,7 +392,328 @@ module.exports = {
             });
             return res.status(500).json({ success: false, message: "Internal error" });
         }
-    }
+    },
 
+    addReactionMsg: async (req, res) => {
+        try {
+            const reactionMap = {
+                '👍': 'likes',
+                '❤️': 'hearts',
+                '😂': 'laughs',
+                '😢': 'sads',
+            };
+
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).send({ error: "Unknown user" });
+
+            const { conID, messageId, reaction: emoji } = req.body;
+
+            const reaction = reactionMap[emoji];
+            if (!reaction) {
+                return res.status(400).send({ error: "Invalid reaction emoji" });
+            }
+
+            const conversation = await Conversation.findOne({
+                _id: conID,
+                messages: { $elemMatch: { _id: messageId } }
+            });
+
+            if (!conversation) {
+                return res.status(404).send('Conversation or message not found');
+            }
+
+            const message = conversation.messages.find(msg => msg._id.toString() === messageId);
+
+            if (!message.reactions[reaction]) {
+                return res.status(400).send({ error: "Invalid reaction type" });
+            }
+
+            // Check if the user has already reacted
+            if (!message.reactions[reaction].users.includes(reqUser._id)) {
+                message.reactions[reaction].count += 1;
+                message.reactions[reaction].users.push(reqUser._id);
+            } else {
+                message.reactions[reaction].count -= 1;
+                message.reactions[reaction].users = message.reactions[reaction].users.filter(userId => userId.toString() !== reqUser._id.toString());
+
+                if (message.reactions[reaction].count < 0) {
+                    message.reactions[reaction].count = 0;
+                }
+            }
+
+            await conversation.save();
+
+            return res.status(200).json({ success: true, data: message });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'privateData',
+                file: 'controller',
+                place: 'addReactionMsg',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+
+    deleteMessage: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).send({ error: "Unknown user" });
+
+            const { conID, messageId } = req.body;
+
+            const conversation = await Conversation.findOne({
+                _id: conID,
+                messages: { $elemMatch: { _id: messageId } }
+            });
+
+            if (!conversation) {
+                return res.status(404).send({ error: 'Conversation or message not found' });
+            }
+
+            const messageIndex = conversation.messages.findIndex(msg => msg._id.toString() === messageId);
+            if (messageIndex === -1) {
+                return res.status(404).send({ error: 'Message not found' });
+            }
+            const message = conversation.messages[messageIndex];
+
+
+            if (message.sender !== reqUser.username) {
+                return res.send({ error: 'You are not authorized to delete this message' });
+            }
+            conversation.messages.splice(messageIndex, 1);
+
+            await conversation.save();
+
+            return res.status(200).json({ success: true, message: 'Message deleted successfully' });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'privateData',
+                file: 'controller',
+                place: 'deleteMessage',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+
+    deleteConversation: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).send({ error: "Unknown user" });
+            const { conID } = req.body;
+
+            const conversation = await Conversation.findById(conID);
+
+            if (!conversation) {
+                return res.send({ error: 'Conversation not found' });
+            }
+            if (conversation.RoomStatus !== 'private') {
+                return res.send({ error: 'You can only delete private conversations' });
+            }
+            const isMember = conversation.participants.some(participantId => participantId.toString() === reqUser._id.toString());
+            if (!isMember) {
+
+                return res.send({ error: 'You are not authorized to delete this conversation' });
+            }
+            await Conversation.findByIdAndDelete(conID);
+
+            return res.status(200).json({ success: true, message: 'Conversation deleted successfully' });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'privateData',
+                file: 'controller',
+                place: 'deleteConversation',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+
+    getPublicConversations: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).send({ error: "Unknown user" });
+
+
+
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 20;
+            const skip = (page - 1) * limit;
+
+            const publicConversations = await Conversation.find({ RoomStatus: 'public' })
+                .skip(skip)
+                .limit(limit);
+
+            const totalConversations = await Conversation.countDocuments({ RoomStatus: 'public' });
+            const totalPages = Math.ceil(totalConversations / limit);
+
+            if (!publicConversations.length) {
+                return res.send({ success: false, message: 'No public conversations found.' });
+            }
+
+            return res.status(200).json({
+                success: true,
+                data: publicConversations,
+                totalPages,
+                currentPage: page,
+            });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'privateData',
+                file: 'controller',
+                place: 'getPublicConversations',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+
+    createPublicRoom: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).send({ error: "Unknown user" });
+
+            const { roomName, bio } = req.body;
+
+            console.log(roomName,bio)
+
+            const existingRoom = await Conversation.findOne({
+                RoomName: roomName,
+                RoomStatus: 'public'
+            });
+            if (existingRoom) {
+                return res.send({ error: "A public room with this name already exists." });
+            }
+
+            const newRoom = new Conversation({
+                RoomName: roomName,
+                RoomStatus: 'public',
+                participants: [reqUser._id],
+                owner: reqUser._id.toString(),
+                bio: bio,
+                messages: []
+            });
+
+            await newRoom.save();
+
+            return res.status(201).json({ success: true, message: 'Public room created' });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'publicData',
+                file: 'controller',
+                place: 'createPublicRoom',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+
+    getSingleRoom: async (req, res) => {
+        try {
+            const reqUser = await User.findOne({_id: req.user.userId})
+            if (!reqUser)  return res.send({ error: "Unknown user" });
+            const { roomId } = req.params;
+
+            const existingRoom = await Conversation.findOne({
+                _id: roomId
+            });
+            if (!existingRoom) {
+                return res.send({ error: "Could not find such room." });
+            }
+            if (!existingRoom.participants.includes(reqUser._id)) {
+                existingRoom.participants.push(reqUser._id);
+                await existingRoom.save();
+            }
+
+            return res.status(200).json({ success: true, data: existingRoom  });
+        } catch (error) {
+            await logError({
+                service: 'privateData',
+                file: 'controller',
+                place: 'getSingleRoom',
+                error: error
+            })
+            return res
+                .status(500)
+                .json({ success: false, message: "Internal error" });
+        }
+    },
+
+    sendPublicMsg: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.send({ error: "Unknown user" });
+
+            const { roomId, msg } = req.body;
+            console.log(roomId, msg)
+
+            const conversation = await Conversation.findById(roomId);
+            if (!conversation) return res.send({ error: "Conversation not found" });
+
+            if (!conversation.participants.includes(reqUser._id)) {
+                return res.send({ error: "You are not a participant in this conversation" });
+            }
+
+            conversation.messages.push({
+                sender: reqUser.username,
+                avatar: reqUser.avatar,
+                content: msg,
+                timestamp: Date.now()
+            });
+
+            await conversation.save();
+
+            return res.status(200).json({ success: true, data: conversation });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'publicData',
+                file: 'controller',
+                place: 'sendPublicMsg',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+
+    deleteRoom: async (req, res) => {
+        try {
+
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).send({ error: "Unknown user" });
+
+            const { roomId } = req.body;
+
+            const room = await Conversation.findById(roomId);
+            if (!room) {
+                return res.send({ error: 'Room not found' });
+            }
+            if (room.RoomStatus !== 'public') {
+                return res.send({ error: 'You can only delete public rooms' });
+            }
+            if (room.owner.toString() !== reqUser._id.toString()) {
+                return res.send({ error: 'You are not authorized to delete this room' });
+            }
+
+            await Conversation.findByIdAndDelete(roomId);
+
+            return res.status(200).json({ success: true, message: 'Room deleted successfully' });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'privateData',
+                file: 'controller',
+                place: 'deleteRoom',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
 
 }
