@@ -1,26 +1,72 @@
 const jwt = require('jsonwebtoken');
+const User = require('../schemas/userSchemas');
 
 module.exports = {
     tokenValid: (req, res, next) => {
         try {
             const token = req.cookies.token; // Extract token from cookies
+
             if (!token) {
-                res.clearCookie('isLoggedIn'); // Clear cookie if token is missing
+                res.clearCookie('isLoggedIn', {
+                    httpOnly: true,      
+                    secure: true,
+                    sameSite: 'None',         
+                    path: '/',             
+                });
+                res.clearCookie('SessionTime', {
+                    httpOnly: true,      
+                    secure: true,
+                    sameSite: 'None',         
+                    path: '/',             
+                });
                 return res.send({ success: false, message: 'Session ended. Please log in again.' });
             }
 
             jwt.verify(token, process.env.JWT_KEY, (err, decoded) => {
                 if (err) {
-                    res.clearCookie('token');
-                    res.clearCookie('isLoggedIn');
+                    res.clearCookie('token', {
+                        httpOnly: true,      
+                        secure: true,
+                        sameSite: 'None',         
+                        path: '/',             
+                    });
+                    res.clearCookie('isLoggedIn', {
+                        httpOnly: true,      
+                        secure: true,
+                        sameSite: 'None',         
+                        path: '/',             
+                    });
+                    res.clearCookie('SessionTime', {
+                        httpOnly: true,      
+                        secure: true,
+                        sameSite: 'None',         
+                        path: '/',             
+                    });
+
                     return res.send({ success: false, message: 'Session ended. Please log in again.' });
                 }
                 req.user = decoded; // Store user info in req.user
                 next(); // Proceed to the next middleware or route handler
             });
         } catch (error) {
-            res.clearCookie('token');
-            res.clearCookie('isLoggedIn');
+            res.clearCookie('token', {
+                httpOnly: true,      
+                secure: true,
+                sameSite: 'None',         
+                path: '/',             
+            });
+            res.clearCookie('isLoggedIn', {
+                httpOnly: true,      
+                secure: true,
+                sameSite: 'None',         
+                path: '/',             
+            });
+            res.clearCookie('SessionTime', {
+                httpOnly: true,      
+                secure: true,
+                sameSite: 'None',         
+                path: '/',             
+            });
             return res.send({ success: false, message: 'Session ended. Please log in again.' });
         }
     },

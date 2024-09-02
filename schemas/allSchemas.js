@@ -1,5 +1,10 @@
 module.exports = {
     user: {
+        status: {
+            type: String,
+            enum: ['online', 'offline', 'away', 'busy', 'do_not_disturb'],
+            default: 'offline'
+        },
         username: {
             type: String,
             required: true,

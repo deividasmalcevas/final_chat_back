@@ -12,7 +12,9 @@ const {
     getNotifications,
     viewAllNotifications,
     deleteNotification,
-    rejectFriend
+    rejectFriend,
+    renewSession,
+    changeStatus
 } = require("../controllers/controller");
 
 const {
@@ -54,5 +56,7 @@ router.post("/send-notification", tokenValid, sendNotification);
 router.post("/view-notifications", tokenValid, viewAllNotifications);
 router.post("/del-notification", tokenValid,  deleteNotification);
 router.post("/reject-friend", tokenValid,  rejectFriend);
+router.post("/renew-session", tokenValid,  renewSession);
+router.post("/change-status", tokenValid,  changeStatus);
 
 module.exports = router;

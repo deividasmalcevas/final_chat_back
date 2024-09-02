@@ -29,20 +29,15 @@ io.on('connection', (socket) => {
 
     // Handle user login
     socket.on('user_login', (user) => {
-        userSockets.set(user.id, socket.id);
-        console.log(`User logged in: ${user.name} with ID: ${user.id}`);
+        userSockets.set(user._id, socket.id);
+        console.log(`User logged in: ${user.username} with ID: ${user._id}`);
     });
 
     // Handle user logout
     socket.on('user_logout', (data) => {
-        userSockets.delete(data.id);
-        console.log(`User logged out with ID: ${data.id}`);
-    });
 
-    // Handle sending messages
-    socket.on('send_message', (message) => {
-        console.log('Message received:', message);
-        io.emit('new_message', message); // Emit the message to all connected clients
+        userSockets.delete(data._id);
+        console.log(`User logged out with ID: ${data._id}`);
     });
 
     // Handle disconnect event
