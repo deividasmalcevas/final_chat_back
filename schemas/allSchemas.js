@@ -2,7 +2,8 @@ module.exports = {
     user: {
         username: {
             type: String,
-            required: true
+            required: true,
+            unique: true
         },
         password: {
             type: String,
@@ -15,6 +16,7 @@ module.exports = {
         email: {
             type: String,
             required: true,
+            unique: true
         },
         bio: {
             type: String,
@@ -23,13 +25,49 @@ module.exports = {
         timeCreated: {
             type: Number,
             required: true,
-            default: Date.now()
+            default: Date.now
         },
         timeUpdated: {
             type: Number,
             required: true,
-            default: Date.now()
+            default: Date.now
         },
+        friends: [{
+            userId: {
+                type: String,
+            },
+            status: {
+                type: String,
+                enum: ['pending', 'accepted', 'declined'],
+                default: 'pending'
+            },
+            timeAdded: {
+                type: Date,
+                default: Date.now
+            }
+        }],
+        notifications: [{
+            type: {
+                type: String,
+                enum: ['friend_request', 'message', 'mention'],
+                required: true
+            },
+            senderId: {
+                type: String,
+            },
+            content: {
+                type: String,
+                required: true
+            },
+            timeCreated: {
+                type: Date,
+                default: Date.now
+            },
+            isRead: {
+                type: Boolean,
+                default: false 
+            }
+        }]
     },
     tempUser:{
         email: { type: String, required: true },
@@ -81,17 +119,25 @@ module.exports = {
             enum: ['private', 'public'],
             default: 'private'
         },
-        owner:{
-            type: String,
+        owner: {
+            id: { type: String },
+            username: { type: String}, 
+            avatar: { type: String } 
         },
         bio:{
           type: String,
         },
         participants: [{
-            type: String,
+            id: { type: String, required: true }, 
+            username: { type: String, required: true }, 
+            avatar: { type: String, required: true } 
         }],
         messages: [{
             sender: {
+                type: String,
+                required: true
+            },
+            senderId: {
                 type: String,
                 required: true
             },
