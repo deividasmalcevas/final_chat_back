@@ -58,9 +58,17 @@ io.on('connection', (socket) => {
         socket.to(conID).emit('message_deleted', messageId); // Send the message ID to the room
     });
     
-    socket.on('check_user_status', (userId, callback) => {
-        const isConnected = userSockets.has(userId); // Check if the user is connected
-        callback(isConnected); // Send back the connection status
+    socket.on('check_user_status', ({ userId, conID }, callback) => {
+        const socketId = userSockets.get(userId); // Get the user's socket ID
+    
+        if (socketId) {
+            
+            const isConnected = io.sockets.sockets.get(socketId)?.rooms.has(conID);
+    
+            callback(isConnected); // Send back the connection status specific to the room
+        } else {
+            callback(false); // User is not connected at all
+        }
     });
 
     // Handle disconnect event
