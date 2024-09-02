@@ -6,14 +6,14 @@ module.exports = {
             const token = req.cookies.token; // Extract token from cookies
             if (!token) {
                 res.clearCookie('isLoggedIn'); // Clear cookie if token is missing
-                return res.status(401).json({ success: false, message: 'Session ended. Please log in again.' });
+                return res.send({ success: false, message: 'Session ended. Please log in again.' });
             }
 
             jwt.verify(token, process.env.JWT_KEY, (err, decoded) => {
                 if (err) {
                     res.clearCookie('token');
                     res.clearCookie('isLoggedIn');
-                    return res.status(401).json({ success: false, message: 'Session ended. Please log in again.' });
+                    return res.send({ success: false, message: 'Session ended. Please log in again.' });
                 }
                 req.user = decoded; // Store user info in req.user
                 next(); // Proceed to the next middleware or route handler
@@ -21,7 +21,7 @@ module.exports = {
         } catch (error) {
             res.clearCookie('token');
             res.clearCookie('isLoggedIn');
-            return res.status(401).json({ success: false, message: 'Session ended. Please log in again.' });
+            return res.send({ success: false, message: 'Session ended. Please log in again.' });
         }
     },
     bioValid: (req, res, next) => {
@@ -61,12 +61,12 @@ module.exports = {
         next();
     },
     privateMsgValid: (req, res, next) => {
-        const { username, msg } = req.body;
-        if (!username || !msg) {
-            return res.status(400).send({ error: "Missing username or message." });
+        const { user, msg } = req.body;
+        if (!user || !msg) {
+            return res.send({ error: "Missing user or message." });
         }
         if (msg.length > 2000) {
-            return res.status(400).send({ error: "Message too long 2000 character max." });
+            return res.send({ error: "Message too long 2000 character max." });
         }
         next();
     },
@@ -115,10 +115,10 @@ module.exports = {
         const { roomId, msg } = req.body;
 
         if (!roomId || !msg) {
-            return res.status(400).send({ error: "Missing room or message." });
+            return res.send({ error: "Missing room or message." });
         }
         if (msg.length > 2000) {
-            return res.status(400).send({ error: "Message too long 2000 character max." });
+            return res.send({ error: "Message too long 2000 character max." });
         }
         next();
     },

@@ -25,13 +25,13 @@ module.exports = {
             }
 
             if (!user) {
-                return res.status(400).json({ error: "Invalid email/username or password." });
+                return res.send({ error: "Invalid email/username or password." });
             }
 
             // Check if the password is correct
             const isMatch = await bcrypt.compare(password, user.password);
             if (!isMatch) {
-                return res.status(400).json({ error: "Invalid email/username or password." });
+                return res.send({ error: "Invalid email/username or password." });
             }
 
             await User.findOneAndUpdate(
@@ -46,14 +46,18 @@ module.exports = {
 
             // Set HttpOnly cookie
             res.cookie('token', token, {
-                httpOnly: true,  // Prevents access via JavaScript
-                // secure: false,   // Set to true if using HTTPS
+                httpOnly: true,
+                secure: true, 
+                sameSite: 'None', // Change to 'Lax' if not using cross-origin
                 maxAge: 3600000, // 1 hour
             });
-            //for log
+    
+            // Set another cookie
             res.cookie('isLoggedIn', true, {
                 maxAge: 3600000, // 1 hour
-                path: '/', // Path where the cookie is available
+                path: '/',
+                secure: true, 
+                sameSite: 'None', // Change to 'Lax' if not using cross-origin
             });
 
             return res.status(200).json({ success: true, message: 'Login Success' });
@@ -71,9 +75,9 @@ module.exports = {
         const { email, username, password1 } = req.body;
 
         const existingEmail = await User.findOne({ email });
-        if (existingEmail) return res.status(400).json({ error: "Email is already registered." });
+        if (existingEmail) return res.send({ error: "Email is already registered." });
         const existingUsername = await User.findOne({ username });
-        if (existingUsername) return res.status(400).json({ error: "Username is already taken." });
+        if (existingUsername) return res.send({ error: "Username is already taken." });
 
         const verificationToken = generateVerificationCode();
 
@@ -114,7 +118,7 @@ module.exports = {
     verifyEmail: async (req, res) => {
         const { token } = req.body;
         const tempUser = await TempUser.findOne({ verificationToken: token });
-        if (!tempUser)  return res.status(400).json({ error: "Invalid or expired token." });
+        if (!tempUser)  return res.send({ error: "Invalid or expired token." });
 
         const user = new User({
             email: tempUser.email,

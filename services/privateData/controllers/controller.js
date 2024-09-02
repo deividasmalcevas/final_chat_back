@@ -14,14 +14,26 @@ module.exports = {
     },
     getUser: async (req, res) => {
         const user = await User.findOne({_id: req.user.userId})
-        if (!user)  return res.status(400).json({ error: "Unknown user" });
+        if (!user)  return res.send({ error: "Unknown user" });
         user.timeUpdated = new Date();
         await user.save()
         return res.status(200).json({ success: true, data: {_id: user._id, bio: user.bio , username: user.username, avatar: user.avatar , joined: user.timeCreated, online: user.timeUpdated, email: user.email} });
     },
     logout: async (req, res) => {
-        res.clearCookie('token');
-        res.clearCookie('isLoggedIn');
+        res.clearCookie('token', {
+            httpOnly: true,      
+            secure: true,
+            sameSite: 'None',         
+            path: '/',             
+        });
+    
+        res.clearCookie('isLoggedIn', {
+            secure: true,
+            maxAge: 3600000,         
+            sameSite: 'None',         
+            path: '/',               
+        });
+    
         return res.status(200).json({ success: true, message: "logged out" });
     },
     changeAvatar: async (req, res) => {
@@ -31,16 +43,25 @@ module.exports = {
                     .status(400)
                     .json({ success: false, error: "File not attached" });
             }
-
-            const user = await User.findOne({_id: req.user.userId})
+    
+            const user = await User.findOne({ _id: req.user.userId });
             if (!user) {
                 return res
                     .status(404)
-                    .json({ success: false, error: "" });
+                    .json({ success: false, error: "Unknown user" });
             }
+    
+            // Update user's avatar
             user.avatar = req.file.path; // `req.file.path` contains the Cloudinary URL
             user.timeUpdated = new Date();
             await user.save();
+    
+            // Update all conversations where the user is the owner with the new avatar
+            await Conversation.updateMany(
+                { 'owner.id': user._id },  // Condition to match conversations where the user is the owner
+                { $set: { 'owner.avatar': user.avatar } }  // Update the owner's avatar
+            );
+    
             return res.status(200).json({
                 success: true,
                 message: "Avatar changed successfully.",
@@ -52,17 +73,18 @@ module.exports = {
                 file: 'controller',
                 place: 'changeAvatar',
                 error: error
-            })
+            });
             return res
                 .status(500)
                 .json({ success: false, message: "Internal error" });
         }
     },
+    
     changeBio: async (req, res) => {
         try {
             const { bio } = req.body;
             const user = await User.findOne({_id: req.user.userId})
-            if (!user)  return res.status(400).json({ error: "Unknown user" });
+            if (!user)  return res.send({ error: "Unknown user" });
             user.bio = bio;
             await user.save()
             return res.status(200).json({ success: true, data: user.bio });
@@ -81,16 +103,26 @@ module.exports = {
     changeUsername: async (req, res) => {
         try {
             const { username, password } = req.body;
-            const user = await User.findOne({_id: req.user.userId})
-            if (!user)  return res.status(400).json({ error: "Unknown user" });
+            const user = await User.findOne({ _id: req.user.userId });
+            if (!user) return res.send({ error: "Unknown user" });
+    
             const isMatch = await bcrypt.compare(password, user.password);
             if (!isMatch) {
                 return res.send({ error: "Wrong credentials." });
             }
-            const existUser = await User.findOne({username: username})
-            if (existUser)  return res.send({ error: "Username is taken." });
+    
+            const existUser = await User.findOne({ username: username });
+            if (existUser) return res.send({ error: "Username is taken." });
+    
             user.username = username;
-            await user.save()
+            await user.save();
+    
+            // Find all conversations where the user is the owner and update the owner's username
+            await Conversation.updateMany(
+                { 'owner.id': user._id },  // Condition to match conversations where the user is the owner
+                { $set: { 'owner.username': username } }  // Update the owner's username
+            );
+    
             return res.status(200).json({ success: true, data: user.username });
         } catch (error) {
             await logError({
@@ -98,12 +130,13 @@ module.exports = {
                 file: 'controller',
                 place: 'changeUsername',
                 error: error
-            })
+            });
             return res
                 .status(500)
                 .json({ success: false, message: "Internal error" });
         }
     },
+    
     changeEmail: async (req, res) => {
         try {
             const { email, password } = req.body;
@@ -173,7 +206,7 @@ module.exports = {
         try {
             const { newPassword, password} = req.body;
             const user = await User.findOne({_id: req.user.userId})
-            if (!user)  return res.status(400).json({ error: "Unknown user" });
+            if (!user)  return res.send({ error: "Unknown user" });
             const isMatch = await bcrypt.compare(password, user.password);
             if (!isMatch) {
                 return res.send({ error: "Wrong credentials." });
@@ -236,46 +269,75 @@ module.exports = {
     verifyDelChange: async (req, res) => {
         try {
             const { code } = req.body;
-            const user = await User.findOne({_id: req.user.userId})
-            if (!user)  return res.send({ error: "Unknown user" });
-            const existCode = await tempVerify.findOne({verificationToken: code, userId: user._id})
-            if (!existCode)  return res.send({ error: "Invalid code" });
-
+            const user = await User.findOne({ _id: req.user.userId });
+            if (!user) return res.send({ error: "Unknown user" });
+    
+            const existCode = await tempVerify.findOne({ verificationToken: code, userId: user._id });
+            if (!existCode) return res.send({ error: "Invalid code" });
+    
+            // Delete private conversations associated with the user
+            await Conversation.deleteMany({
+                RoomStatus: "private", // Ensure the conversation is private
+                participants: { $elemMatch: { id: user._id } } // Check if the user's ID exists in the participants array
+            });
+    
+            // Now delete the user
             await User.deleteOne({ _id: user._id });
             await tempVerify.deleteOne({ userId: user._id });
-            res.clearCookie('token');
-            res.clearCookie('isLoggedIn');
+    
+            // Clear cookies
+            res.clearCookie('token', {
+                httpOnly: true,
+                secure: true,
+                sameSite: 'None',
+                path: '/',
+            });
+    
+            res.clearCookie('isLoggedIn', {
+                secure: true,
+                maxAge: 3600000,
+                sameSite: 'None',
+                path: '/',
+            });
+    
             return res.status(200).json({ success: true });
         } catch (error) {
             await logError({
                 service: 'privateData',
                 file: 'controller',
-                place: 'verifyEmailChange',
-                error: error
-            })
-            return res
-                .status(500)
-                .json({ success: false, message: "Internal error" });
+                place: 'verifyDelChange',
+                error: error,
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
         }
     },
+    
 
     getUsers: async (req, res) => {
         try {
+            const reqUser = await User.findOne({ _id: req.user.userId });
+            if (!reqUser) return res.status(404).json({ error: "Unknown user" });
+    
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 12;
             const skip = (page - 1) * limit;
-
-            const users = await User.find()
+    
+            const users = await User.find({ _id: { $ne: req.user.userId } })
                 .skip(skip)
                 .limit(limit)
                 .exec();
-
-            const totalUsers = await User.countDocuments();
-
+    
+            const totalUsers = await User.countDocuments({ _id: { $ne: req.user.userId } });
+    
             const totalPages = Math.ceil(totalUsers / limit);
-
-            res.json({success: true, data: {
-                    users, totalPages, currentPage: page,},
+    
+            res.json({
+                success: true,
+                data: {
+                    users,
+                    totalPages,
+                    currentPage: page,
+                },
             });
         } catch (error) {
             await logError({
@@ -283,10 +345,8 @@ module.exports = {
                 file: 'controller',
                 place: 'getUsers',
                 error: error
-            })
-            return res
-                .status(500)
-                .json({ success: false, message: "Internal error" });
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
         }
     },
 
@@ -319,25 +379,31 @@ module.exports = {
         try {
             const reqUser = await User.findById(req.user.userId);
             if (!reqUser) return res.status(404).send({ error: "Unknown user" });
-
-            const { username, msg } = req.body;
-
-            const user = await User.findOne({ username: username });
-            if (!user) return res.status(404).send({ error: "Unknown user" });
-
+    
+            const { user, msg } = req.body; 
+           
             let conversation = await Conversation.findOne({
                 RoomStatus: "private",
-                participants: { $all: [reqUser._id, user._id] }
+                participants: {
+                    $all: [
+                        { $elemMatch: { id: reqUser._id.toString() } },
+                        { $elemMatch: { id: user._id.toString() } }
+                    ]
+                }
             });
-
+    
             if (!conversation) {
-
+        
                 conversation = new Conversation({
                     RoomName: `${user.username}-${reqUser.username}`,
                     RoomStatus: "private",
-                    participants: [user._id, reqUser._id],
+                    participants: [
+                        { id: reqUser._id, username: reqUser.username, avatar: reqUser.avatar },
+                        { id: user._id, username: user.username, avatar: user.avatar }
+                    ],
                     messages: [{
                         sender: reqUser.username,
+                        senderId: reqUser._id,
                         avatar: reqUser.avatar,
                         content: msg,
                         timestamp: Date.now()
@@ -346,12 +412,12 @@ module.exports = {
             } else {
                 conversation.messages.push({
                     sender: reqUser.username,
+                    senderId: reqUser._id,
                     avatar: reqUser.avatar,
                     content: msg,
                     timestamp: Date.now()
                 });
             }
-
             await conversation.save();
             return res.status(200).json({ success: true, data: conversation });
         } catch (error) {
@@ -365,20 +431,23 @@ module.exports = {
             return res.status(500).json({ success: false, message: "Internal error" });
         }
     },
+    
 
     getPrivateCon: async (req, res) => {
         try {
             const reqUser = await User.findById(req.user.userId);
             if (!reqUser) return res.status(404).send({ error: "Unknown user" });
 
-            const { username } = req.params;
-
-            const user = await User.findOne({ username: username });
-            if (!user) return res.status(404).send({ error: "Unknown user" });
+            const { userId } = req.params;
 
             let conversation = await Conversation.findOne({
                 RoomStatus: "private",
-                participants: { $all: [reqUser._id, user._id] }
+                participants: {
+                    $all: [
+                        { $elemMatch: { id: reqUser._id.toString() } },
+                        { $elemMatch: { id: userId } }
+                    ]
+                }
             });
             if (!conversation) return res.send({error: "There is no conversation" });
             return res.status(200).json({ success: true, data: conversation });
@@ -478,12 +547,11 @@ module.exports = {
             }
             const message = conversation.messages[messageIndex];
 
-
-            if (message.sender !== reqUser.username) {
+            if (message.senderId !== reqUser._id.toString()) {
                 return res.send({ error: 'You are not authorized to delete this message' });
             }
             conversation.messages.splice(messageIndex, 1);
-
+            
             await conversation.save();
 
             return res.status(200).json({ success: true, message: 'Message deleted successfully' });
@@ -513,11 +581,11 @@ module.exports = {
             if (conversation.RoomStatus !== 'private') {
                 return res.send({ error: 'You can only delete private conversations' });
             }
-            const isMember = conversation.participants.some(participantId => participantId.toString() === reqUser._id.toString());
+            const isMember = conversation.participants.some(participant => participant.id.toString() === reqUser._id.toString());
             if (!isMember) {
-
                 return res.send({ error: 'You are not authorized to delete this conversation' });
             }
+            
             await Conversation.findByIdAndDelete(conID);
 
             return res.status(200).json({ success: true, message: 'Conversation deleted successfully' });
@@ -532,13 +600,11 @@ module.exports = {
             return res.status(500).json({ success: false, message: "Internal error" });
         }
     },
-
+    
     getPublicConversations: async (req, res) => {
         try {
             const reqUser = await User.findById(req.user.userId);
             if (!reqUser) return res.status(404).send({ error: "Unknown user" });
-
-
 
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 20;
@@ -580,7 +646,6 @@ module.exports = {
 
             const { roomName, bio } = req.body;
 
-            console.log(roomName,bio)
 
             const existingRoom = await Conversation.findOne({
                 RoomName: roomName,
@@ -593,8 +658,16 @@ module.exports = {
             const newRoom = new Conversation({
                 RoomName: roomName,
                 RoomStatus: 'public',
-                participants: [reqUser._id],
-                owner: reqUser._id.toString(),
+                participants: [{
+                    id: reqUser._id.toString(),
+                    username: reqUser.username,
+                    avatar: reqUser.avatar,
+                }],
+                owner: {
+                    id: reqUser._id.toString(),
+                    username: reqUser.username,
+                    avatar: reqUser.avatar,
+                },
                 bio: bio,
                 messages: []
             });
@@ -626,10 +699,6 @@ module.exports = {
             if (!existingRoom) {
                 return res.send({ error: "Could not find such room." });
             }
-            if (!existingRoom.participants.includes(reqUser._id)) {
-                existingRoom.participants.push(reqUser._id);
-                await existingRoom.save();
-            }
 
             return res.status(200).json({ success: true, data: existingRoom  });
         } catch (error) {
@@ -651,22 +720,31 @@ module.exports = {
             if (!reqUser) return res.send({ error: "Unknown user" });
 
             const { roomId, msg } = req.body;
-            console.log(roomId, msg)
+
+            
 
             const conversation = await Conversation.findById(roomId);
             if (!conversation) return res.send({ error: "Conversation not found" });
 
-            if (!conversation.participants.includes(reqUser._id)) {
-                return res.send({ error: "You are not a participant in this conversation" });
-            }
+            
+            const isParticipant = conversation.participants.some(participant => participant.id.toString() === reqUser._id.toString());
 
+            if (!isParticipant) {
+                conversation.participants.push({
+                    id: reqUser._id.toString(),
+                    username: reqUser.username,
+                    avatar: reqUser.avatar
+                });
+            }
+         
             conversation.messages.push({
                 sender: reqUser.username,
+                senderId: reqUser._id,
                 avatar: reqUser.avatar,
                 content: msg,
                 timestamp: Date.now()
             });
-
+            
             await conversation.save();
 
             return res.status(200).json({ success: true, data: conversation });
@@ -689,6 +767,7 @@ module.exports = {
             if (!reqUser) return res.status(404).send({ error: "Unknown user" });
 
             const { roomId } = req.body;
+            console.log(roomId)
 
             const room = await Conversation.findById(roomId);
             if (!room) {
@@ -697,7 +776,7 @@ module.exports = {
             if (room.RoomStatus !== 'public') {
                 return res.send({ error: 'You can only delete public rooms' });
             }
-            if (room.owner.toString() !== reqUser._id.toString()) {
+            if (room.owner.id.toString() !== reqUser._id.toString()) {
                 return res.send({ error: 'You are not authorized to delete this room' });
             }
 
@@ -716,4 +795,407 @@ module.exports = {
         }
     },
 
+    getUserConversations: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.send({ error: "Unknown user" });
+    
+            const { page = 1, limit = 20 } = req.query;
+            const skip = (page - 1) * limit;
+    
+            // Fetch conversations that include the current user
+            const conversations = await Conversation.find({
+                participants: { $elemMatch: { id: reqUser._id } } // Updated to match the new schema
+            })
+            .skip(skip)
+            .limit(parseInt(limit))
+            .exec();
+    
+            const totalConversations = await Conversation.countDocuments({
+                participants: { $elemMatch: { id: reqUser._id } } // Updated to match the new schema
+            });
+    
+            const totalPages = Math.ceil(totalConversations / limit);
+    
+            const processedConversations = conversations.map(conversation => {
+                // Extract participant details directly from the participants array
+                const validParticipants = conversation.participants.map(participant => ({
+                    id: participant.id,
+                    username: participant.username,
+                    avatar: participant.avatar
+                }));
+    
+                // Determine the room name for private conversations
+                let roomName = conversation.RoomName;
+                if (conversation.RoomStatus === 'private') {
+                    const otherParticipant = validParticipants.find(participant => participant.username !== reqUser.username);
+                    roomName = `DM's With: ${otherParticipant.username}`;
+                }
+    
+                // Limit display participants to a maximum of 5, with ellipsis for additional participants
+                const displayParticipants = validParticipants.length > 5 
+                    ? [...validParticipants.slice(0, 4), { username: '...', avatar: '' }] 
+                    : validParticipants;
+    
+                return {
+                    ...conversation.toObject(), 
+                    participants: displayParticipants, 
+                    RoomName: roomName
+                };
+            });
+    
+            return res.status(200).json({
+                success: true,
+                data: {
+                    conversations: processedConversations,
+                    totalPages
+                }
+            });
+        } catch (error) {
+            // Handle the error
+            await logError({
+                service: 'privateData',
+                file: 'controller',
+                place: 'getConversations',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+
+   addFriend: async (req, res) => {
+    try {
+        const reqUser = await User.findById(req.user.userId);
+        if (!reqUser) return res.status(404).send({ error: "Unknown user" });
+
+        const { userIdToAdd } = req.body;
+        if (!userIdToAdd) return res.send({ error: "User ID is required" });
+
+        const userToAdd = await User.findById(userIdToAdd);
+        if (!userToAdd) return res.send({ error: "User not found" });
+
+        const alreadyFriend = reqUser.friends.some(friend => friend.userId.toString() === userIdToAdd);
+        if (alreadyFriend) {
+            return res.send({ error: "User is already in your friends list." });
+        }
+
+        const otherUserHasSentRequest = userToAdd.friends.some(friend => friend.userId.toString() === reqUser._id.toString());
+        let friendStatus;
+
+        if (otherUserHasSentRequest) {
+            reqUser.friends.push({
+                userId: userIdToAdd,
+                status: 'accepted', // If the other user already sent a friend request, accept it.
+                timeAdded: Date.now()
+            });
+
+            const friendRecord = userToAdd.friends.find(friend => friend.userId.toString() === reqUser._id.toString());
+            if (friendRecord) {
+                friendRecord.status = 'accepted'; // Update the other user's friend request to accepted
+            }
+            friendStatus = 'accepted';
+        } else {
+            reqUser.friends.push({
+                userId: userIdToAdd,
+                status: 'pending', // If the current user is sending a friend request
+                timeAdded: Date.now()
+            });
+            friendStatus = 'pending';
+        }
+
+        await reqUser.save();
+        await userToAdd.save();
+
+        return res.status(200).json({ 
+            success: true, 
+            status: friendStatus // Return the friend status
+        });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'friendManagement',
+                file: 'userController',
+                place: 'addFriend',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+
+
+    checkFriend: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).send({ error: "Unknown user" });
+    
+            const { userId } = req.body;
+            if (!userId) return res.status(400).send({ error: "User ID is required" });
+    
+            const checkUser = await User.findById(userId);
+            if (!checkUser) return res.status(404).send({ error: "User not found" });
+    
+            const friendship = reqUser.friends.find(friend => friend.userId.toString() === userId);
+    
+            let status;
+            if (friendship) {
+                status = friendship.status;
+            } else {
+                status = 'not a friend'; 
+            }
+    
+            return res.status(200).json({ success: true, status });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'friendManagement',
+                file: 'userController',
+                place: 'checkFriend',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+
+    
+    getFriends: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).send({ error: "Unknown user" });
+
+            const { page = 1, limit = 20 } = req.query;
+            const pageNumber = parseInt(page, 10);
+            const limitNumber = parseInt(limit, 10);
+    
+            const friends = [];
+
+            for (const friendship of reqUser.friends) {
+                if (friendship.status === 'accepted') {
+                    const friendUser = await User.findById(friendship.userId);
+                    if (friendUser) {
+                        friends.push({
+                            username: friendUser.username,
+                            avatar: friendUser.avatar
+                        });
+                    }
+                }
+            }
+    
+            const totalFriends = friends.length;
+            const totalPages = Math.ceil(totalFriends / limitNumber);
+            const startIndex = (pageNumber - 1) * limitNumber;
+            const endIndex = startIndex + limitNumber;
+            const paginatedFriends = friends.slice(startIndex, endIndex);
+    
+            return res.status(200).json({
+                success: true,
+                data: paginatedFriends,
+                totalPages: totalPages,
+                currentPage: pageNumber,
+                totalFriends: totalFriends
+            });
+        } catch (error) {
+            await logError({
+                service: 'friendManagement',
+                file: 'userController',
+                place: 'getFriends',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+
+    sendNotification: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).send({ error: "Unknown user" });
+    
+            const { recipientId, content, type } = req.body;
+            if (!recipientId || !content || !type) return res.send({ error: "Recipient ID, content, and type are required" });
+    
+            const recipient = await User.findById(recipientId);
+            if (!recipient) {
+                return res.status(404).send({ error: "Recipient not found." });
+            }
+
+            recipient.notifications.push({
+                type: type,
+                senderId: reqUser._id,
+                content: content,
+                timeCreated: Date.now(),
+                isRead: false
+            });
+    
+            await recipient.save();
+    
+            return res.status(200).json({ success: true, message: "Notification sent successfully!" });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'notificationManagement',
+                file: 'notificationController',
+                place: 'sendNotification',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+
+    getNotifications: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).json({ error: "User not found" });
+    
+            const { page = 1, limit = 10, sort = 'desc' } = req.query;
+            const skip = (page - 1) * limit;
+          
+            const notifications = reqUser.notifications
+                .sort((a, b) => sort === 'asc' ? a.timeCreated - b.timeCreated : b.timeCreated - a.timeCreated)
+                .slice(skip, skip + parseInt(limit));
+    
+    
+            const senderIds = notifications.map(notification => notification.senderId);
+    
+            const senders = await User.find({ _id: { $in: senderIds } }, 'username avatar');
+            const sendersMap = senders.reduce((map, sender) => {
+                map[sender._id] = { username: sender.username, avatar: sender.avatar };
+                return map;
+            }, {});
+    
+            
+            const enrichedNotifications = notifications.map(notification => ({
+                ...notification.toObject(),
+                senderUsername: sendersMap[notification.senderId]?.username || 'Unknown',
+                senderAvatar: sendersMap[notification.senderId]?.avatar || null
+            }));
+    
+            const totalNotifications = reqUser.notifications.length;
+    
+            return res.status(200).json({
+                success: true,
+                notifications: enrichedNotifications,
+                total: totalNotifications,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                totalPages: Math.ceil(totalNotifications / limit)
+            });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'notificationManagement',
+                file: 'notificationController',
+                place: 'getNotifications',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+    viewAllNotifications: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).json({ error: "User not found" });
+    
+            reqUser.notifications.forEach(notification => {
+                if (
+                    notification.content === 'You have received a new private message.' ||
+                    notification.content === 'You have a new friend!'
+                ) {
+                    notification.isRead = true; // Mark as read
+                }
+            });
+    
+            await reqUser.save();
+    
+            return res.status(200).json({
+                success: true,
+                message: "Notifications marked as read successfully",
+                remainingNotifications: reqUser.notifications.length
+            });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'notificationManagement',
+                file: 'notificationController',
+                place: 'viewAllNotifications',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+    deleteNotification: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).json({ error: "User not found" });
+    
+            const notificationId = req.body.notificationId;
+
+            const notificationIndex = reqUser.notifications.findIndex(notification => notification._id.toString() === notificationId);
+            
+            if (notificationIndex === -1) {
+                return res.json({ error: "Notification not found" });
+            }
+
+            reqUser.notifications.splice(notificationIndex, 1);
+    
+            await reqUser.save();
+    
+            return res.status(200).json({
+                success: true,
+                message: "Notification deleted successfully",
+                remainingNotifications: reqUser.notifications.length
+            });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'notificationManagement',
+                file: 'notificationController',
+                place: 'deleteNotification',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    },
+
+    rejectFriend: async (req, res) => {
+        try {
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.send({ error: "Unknown user" });
+    
+            const { userIdToReject } = req.body;
+            if (!userIdToReject) return res.send({ error: "User ID is required" });
+    
+            const userToReject = await User.findById(userIdToReject);
+            if (!userToReject) return res.send({ error: "User not found" });
+    
+            const reqUserFriendIndex = reqUser.friends.findIndex(friend => friend.userId.toString() === userIdToReject && friend.status === 'pending');
+            if (reqUserFriendIndex !== -1) {
+                reqUser.friends.splice(reqUserFriendIndex, 1);
+            }
+    
+            const userToRejectFriendIndex = userToReject.friends.findIndex(friend => friend.userId.toString() === reqUser._id.toString() && friend.status === 'pending');
+            if (userToRejectFriendIndex !== -1) {
+                userToReject.friends.splice(userToRejectFriendIndex, 1);
+            }
+
+            await reqUser.save();
+            await userToReject.save();
+    
+            return res.status(200).json({
+                success: true,
+                message: "Friend request rejected successfully."
+            });
+        } catch (error) {
+            // Log the error and return a server error response
+            await logError({
+                service: 'friendManagement',
+                file: 'userController',
+                place: 'rejectFriend',
+                error: error
+            });
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
+    }
+    
+    
+    
+    
 }
