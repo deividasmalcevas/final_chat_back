@@ -1,6 +1,7 @@
 const User = require('../schemas/userSchemas');
 const tempVerify = require('../schemas/tempVerify');
 const Conversation = require('../schemas/messsageSchema');
+const jwt = require('jsonwebtoken');
 
 const logError = require('../../authentication/plugins/errSaver')
 const bcrypt = require("bcrypt");
@@ -17,9 +18,15 @@ module.exports = {
         if (!user)  return res.send({ error: "Unknown user" });
         user.timeUpdated = new Date();
         await user.save()
-        return res.status(200).json({ success: true, data: {_id: user._id, bio: user.bio , username: user.username, avatar: user.avatar , joined: user.timeCreated, online: user.timeUpdated, email: user.email} });
+        return res.status(200).json({ success: true, data: {_id: user._id, status: user.status , bio: user.bio , username: user.username, avatar: user.avatar , joined: user.timeCreated, online: user.timeUpdated, email: user.email} });
     },
     logout: async (req, res) => {
+        const user = await User.findOne({_id: req.user.userId})
+        if (!user)  return res.send({ error: "Unknown user" });
+
+        user.status = "offline"
+        await user.save()
+
         res.clearCookie('token', {
             httpOnly: true,      
             secure: true,
@@ -28,8 +35,13 @@ module.exports = {
         });
     
         res.clearCookie('isLoggedIn', {
-            secure: true,
-            maxAge: 3600000,         
+            secure: true,        
+            sameSite: 'None',         
+            path: '/',               
+        });
+
+        res.clearCookie('SessionTime', {
+            secure: true,        
             sameSite: 'None',         
             path: '/',               
         });
@@ -285,7 +297,6 @@ module.exports = {
             await User.deleteOne({ _id: user._id });
             await tempVerify.deleteOne({ userId: user._id });
     
-            // Clear cookies
             res.clearCookie('token', {
                 httpOnly: true,
                 secure: true,
@@ -295,9 +306,14 @@ module.exports = {
     
             res.clearCookie('isLoggedIn', {
                 secure: true,
-                maxAge: 3600000,
                 sameSite: 'None',
                 path: '/',
+            });
+
+            res.clearCookie('SessionTime', {
+                secure: true,        
+                sameSite: 'None',         
+                path: '/',               
             });
     
             return res.status(200).json({ success: true });
@@ -1193,9 +1209,89 @@ module.exports = {
             });
             return res.status(500).json({ success: false, message: "Internal error" });
         }
+    },
+    renewSession: async (req, res) => {
+        try {
+            // Access the user from the request object
+            const reqUser = await User.findById(req.user.userId);
+            if (!reqUser) return res.status(404).send({ error: "Unknown user" });
+           
+            // Update user status to online and refresh the timestamp
+            await User.findOneAndUpdate(
+                { _id: reqUser },
+                { $set: { timeUpdated: Date.now(), status: 'online' } }
+            );
+   
+            // Create a new JWT token with the same user ID and username
+            const newToken = jwt.sign({ userId: reqUser._id, username: reqUser.username }, process.env.JWT_KEY, {
+                expiresIn: '1h', // Set the new expiration time
+            });
+            const expirationTime = Date.now() +  3600 * 1000; // 1 hour from now
+    
+            // Set the new HttpOnly cookie with the new token
+            res.cookie('token', newToken, {
+                httpOnly: true,
+                secure: true,
+                sameSite: 'None',
+            });
+    
+            // Update or set the cookies for isLoggedIn and SessionTime
+            res.cookie('isLoggedIn', true, {
+                maxAge: expirationTime,
+                path: '/',
+                secure: true,
+                sameSite: 'None',
+            });
+    
+            res.cookie('SessionTime', expirationTime, {
+                maxAge: expirationTime,
+                path: '/',
+                secure: true,
+                sameSite: 'None',
+            });
+    
+            return res.status(200).json({ success: true, message: 'Session renewed successfully' });
+        } catch (error) {
+            await logError({
+                service: 'Authentication',
+                file: 'controller',
+                place: 'renewSession',
+                error: error,
+            });
+            return res.status(500).json({ success: false, error: error.message });
+        }
+    },
+    changeStatus: async (req, res) => {
+        try {
+            const { status } = req.body; 
+    
+          
+            const validStatuses = ['online', 'away', 'busy', 'do_not_disturb']; 
+            if (!validStatuses.includes(status)) {
+                return res.send({ success: false, message: "Invalid status" });
+            }
+
+            const user = await User.findOne({ _id: req.user.userId });
+            if (!user) return res.send({ error: "Unknown user" });
+    
+            user.status = status; 
+            await user.save(); 
+    
+            // Return success response
+            return res.status(200).json({ success: true, data: user.status });
+        } catch (error) {
+            // Log the error for debugging
+            await logError({
+                service: 'privateData',
+                file: 'controller',
+                place: 'changeStatus',
+                error: error
+            });
+    
+            // Return error response
+            return res.status(500).json({ success: false, message: "Internal error" });
+        }
     }
-    
-    
-    
+
     
 }

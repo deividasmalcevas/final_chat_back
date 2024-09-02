@@ -11,7 +11,7 @@ const {user} = require("../../../schemas/allSchemas");
 
 module.exports = {
     login: async (req, res) => {
-
+        const expirationTime = Date.now() + 3600 * 1000;
         const { identifier, password } = req.body;
 
         try {
@@ -36,8 +36,8 @@ module.exports = {
 
             await User.findOneAndUpdate(
                 { _id: user._id },
-                { $set: { timeUpdated: Date.now() } }
-            );
+                { $set: { timeUpdated: Date.now(), status: 'online' } }
+            );                      
 
             // Create JWT token
             const token = jwt.sign({ userId: user._id, username: user.username }, process.env.JWT_KEY, {
@@ -48,19 +48,24 @@ module.exports = {
             res.cookie('token', token, {
                 httpOnly: true,
                 secure: true, 
-                sameSite: 'None', // Change to 'Lax' if not using cross-origin
-                maxAge: 3600000, // 1 hour
-            });
-    
-            // Set another cookie
-            res.cookie('isLoggedIn', true, {
-                maxAge: 3600000, // 1 hour
-                path: '/',
-                secure: true, 
-                sameSite: 'None', // Change to 'Lax' if not using cross-origin
+                sameSite: 'None',
             });
 
-            return res.status(200).json({ success: true, message: 'Login Success' });
+            res.cookie('isLoggedIn', true, {
+                maxAge: expirationTime, 
+                path: '/',
+                secure: true, 
+                sameSite: 'None', 
+            });
+
+            res.cookie('SessionTime', expirationTime , {
+                maxAge: expirationTime, 
+                path: '/',
+                secure: true, 
+                sameSite: 'None', 
+            });
+
+            return res.status(200).json({ success: true, message: 'Login Success', userId: user._id});
         } catch (error) {
             await logError({
                 service: 'Authentication',

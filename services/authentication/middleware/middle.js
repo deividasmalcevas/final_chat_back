@@ -17,12 +17,14 @@ module.exports = {
         }
 
         // Check if password is at least 8 characters long, contains at least one uppercase letter and one number
-        const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+        const passwordRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[?!@#$%^&*_+]).{8,}$/;
+
         if (!passwordRegex.test(password1)) {
             return res.send({
-                error: "Password must be at least 8 characters long, contain at least one uppercase letter, and one number.",
+                error: "Password must be at least 8 characters long, contain at least one uppercase letter, one number, and one special character (!?@#$%^&*_+).",
             });
         }
+        
 
         // Check if password1 and password2 match
         if (password1 !== password2) {
