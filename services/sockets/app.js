@@ -8,7 +8,6 @@ const app = express();
 
 dotenv.config({ path: path.resolve(__dirname, '../../../final_chat_back/.env') });
 
-
 app.use(cors({})); // Enable CORS for all routes
 
 const server = http.createServer(app);
@@ -18,8 +17,8 @@ const io = new Server(server, {
         methods: ["GET", "POST"]
     }
 });
-//a
-console.log(process.env.ORIGIN)
+
+console.log(process.env.ORIGIN);
 
 // Store connected users and their sockets
 const userSockets = new Map();
@@ -27,17 +26,41 @@ const userSockets = new Map();
 io.on('connection', (socket) => {
     console.log('New client connected', socket.id);
 
-    // Handle user login
     socket.on('user_login', (user) => {
         userSockets.set(user._id, socket.id);
-        console.log(`User logged in: ${user.username} with ID: ${user._id}`);
     });
 
-    // Handle user logout
     socket.on('user_logout', (data) => {
-
         userSockets.delete(data._id);
-        console.log(`User logged out with ID: ${data._id}`);
+    });
+
+    // Handle joining a room
+    socket.on('join_room', (roomId) => {
+        socket.join(roomId); // Join the room specified by roomId
+    });
+
+    // Message handling
+    socket.on('message', (messageData) => {
+        // Send message to other users in the room
+        socket.to(messageData.conID).emit('message', messageData); // Send only to the room
+    });
+
+    // Reaction handling
+    socket.on('reaction', (updatedMessage) => {
+        console.log(updatedMessage);
+        // Send the updated message with reactions to the room
+        socket.to(updatedMessage.conID).emit('message', updatedMessage); // Send the updated message to the room
+    });
+    
+    // Message deletion handling
+    socket.on('delete_message', ({ conID, messageId }) => {
+        // Send the message ID to the room so others can handle it
+        socket.to(conID).emit('message_deleted', messageId); // Send the message ID to the room
+    });
+    
+    socket.on('check_user_status', (userId, callback) => {
+        const isConnected = userSockets.has(userId); // Check if the user is connected
+        callback(isConnected); // Send back the connection status
     });
 
     // Handle disconnect event
@@ -52,6 +75,7 @@ io.on('connection', (socket) => {
         }
     });
 });
+
 
 const PORT = 1010;
 server.listen(PORT, () => {

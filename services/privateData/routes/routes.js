@@ -48,7 +48,7 @@ router.post("/add-msg-reaction", tokenValid, addMsgReactValid , addReactionMsg);
 router.post("/del-msg", tokenValid, delMsgValid , deleteMessage);
 router.post("/del-convo", tokenValid, delConvoValid , deleteConversation);
 router.post("/create-room", tokenValid, createRoomValid , createPublicRoom);
-router.post("/send-prublic-msg", tokenValid, publicMsgValid , sendPublicMsg);
+router.post("/send-public-msg", tokenValid, publicMsgValid , sendPublicMsg);
 router.post("/delete-room", tokenValid, deleteRoomValid, deleteRoom);
 router.post("/add-friend", tokenValid, addFriend);
 router.post("/check-friend", tokenValid, checkFriend);

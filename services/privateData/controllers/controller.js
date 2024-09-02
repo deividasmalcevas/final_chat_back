@@ -490,7 +490,7 @@ module.exports = {
 
             const reqUser = await User.findById(req.user.userId);
             if (!reqUser) return res.status(404).send({ error: "Unknown user" });
-
+          
             const { conID, messageId, reaction: emoji } = req.body;
 
             const reaction = reactionMap[emoji];
@@ -734,12 +734,10 @@ module.exports = {
         try {
             const reqUser = await User.findById(req.user.userId);
             if (!reqUser) return res.send({ error: "Unknown user" });
-
-            const { roomId, msg } = req.body;
-
             
+            const { conID, msg } = req.body;
 
-            const conversation = await Conversation.findById(roomId);
+            const conversation = await Conversation.findById(conID);
             if (!conversation) return res.send({ error: "Conversation not found" });
 
             
@@ -782,10 +780,10 @@ module.exports = {
             const reqUser = await User.findById(req.user.userId);
             if (!reqUser) return res.status(404).send({ error: "Unknown user" });
 
-            const { roomId } = req.body;
-            console.log(roomId)
+            const { conID } = req.body;
+            
 
-            const room = await Conversation.findById(roomId);
+            const room = await Conversation.findById(conID);
             if (!room) {
                 return res.send({ error: 'Room not found' });
             }
@@ -796,7 +794,7 @@ module.exports = {
                 return res.send({ error: 'You are not authorized to delete this room' });
             }
 
-            await Conversation.findByIdAndDelete(roomId);
+            await Conversation.findByIdAndDelete(conID);
 
             return res.status(200).json({ success: true, message: 'Room deleted successfully' });
         } catch (error) {
@@ -1030,7 +1028,7 @@ module.exports = {
     
             const recipient = await User.findById(recipientId);
             if (!recipient) {
-                return res.status(404).send({ error: "Recipient not found." });
+                return res.send({ error: "Recipient not found." });
             }
 
             recipient.notifications.push({
