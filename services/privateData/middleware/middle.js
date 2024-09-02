@@ -158,9 +158,8 @@ module.exports = {
         next();
     },
     publicMsgValid: (req, res, next) => {
-        const { roomId, msg } = req.body;
-
-        if (!roomId || !msg) {
+        const { conID, msg } = req.body;
+        if (!conID || !msg) {
             return res.send({ error: "Missing room or message." });
         }
         if (msg.length > 2000) {
@@ -169,8 +168,8 @@ module.exports = {
         next();
     },
     deleteRoomValid: (req, res, next) => {
-        const {roomId} = req.body;
-        if (!roomId) {
+        const {conID} = req.body;
+        if (!conID) {
             return res.send({ error: "Missing room." });
         }
         next();
